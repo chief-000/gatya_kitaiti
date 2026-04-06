@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>ガチャ期待値計算サイト</title>
+
+
+  <style>
+    .gacha-box {
+        display: grid;
+        grid-template-columns: 220px 1fr;
+        gap: 24px;
+        align-items: start;
+        border: 1px solid #ccc;
+        border-radius: 10px;
+        padding: 16px;
+        margin: 5px 0;
+        background: #fafafa;
+    }
+    .input-area p {
+        margin: 0 0 8px 0;
+    }
+
+    .input-summary p,
+    .result-summary p {
+        margin: 6px 0;
+    }
+
+    .input-area label {
+        display: inline-block;
+        width: 70px;
+    }
+
+    .input-area input {
+        width: 90px;
+        margin-bottom: 8px;
+    }
+
+    .result-summary {
+        border-left: 1px solid #ddd;
+        padding-left: 20px;
+    }
+    .help-box {
+        border: 1px solid #ccc;
+        border-radius: 10px;
+        padding: 12px 16px;
+        margin-bottom: 20px;
+        background-color: #f9f9f9;
+    }
+
+    .help-box summary {
+        font-weight: bold;
+        cursor: pointer;
+        font-size: 18px;
+    }
+
+    .help-box h3 {
+        margin-top: 16px;
+        margin-bottom: 8px;
+        font-size: 16px;
+    }
+
+    .help-box p {
+        margin: 6px 0;
+        line-height: 1.6;
+    }
+
+
+</style>
+</head>
+<body>
+  <h1>ガチャ期待値計算サイト</h1>
+  <details class="help-box">
+    <summary>このサイトの使い方・用語の説明</summary>
+
+    <h3>このサイトについて</h3>
+    <p>このサイトでは、当選確率の異なる独立した複数のガチャ結果を入力し、低確率の当選ほど大きな重みを持つ価値スコアに基づいて、全体の結果が期待に対してどの程度上振れまたは下振れしているかを定量的に確認できます。</p>
+    <p>さらに、その結果を踏まえて、次のガチャでどの程度の当選があれば差分を補えるかについても計算できます。</p>
+    <h3>使い方</h3>
+    <p>1. 「ガチャを追加」ボタンで入力欄を増やします。</p>
+    <p>2. 各ガチャについて、確率・抽選回数・当選回数を入力します。</p>
+    <p>3. 各ガチャごとの結果と、合計収支を確認できます。</p>
+    <p>4. 最後に次のガチャの確率と回数を入力すると、価値収支差を相殺するために必要な当選回数を確認できます。</p>
+
+    <h3>各項目の意味</h3>
+    <p><strong>期待値</strong>：抽選回数 × 当選確率 で求めた、理論上の平均当選回数です。</p>
+    <p><strong>期待値との差</strong>：実際の当選回数が期待値よりどれだけ多いか、または少ないかを表します。</p>
+    <p><strong>価値スコア</strong>：当選確率の逆数で表した、1回当たりの当選価値です。低確率の当選ほど価値が大きくなります。</p>
+    <p><strong>基準価値スコア</strong>：そのガチャ条件で理論上期待される価値です。抽選回数と同じ値になります。</p>
+    <p><strong>差分価値スコア</strong>：実際の結果が基準価値よりどれだけ上振れ・下振れしたかを表します。</p>
+    <p><strong>次のガチャ計算</strong>：次に引く予定のガチャ条件を入力します。これまでのガチャ結果から、次のガチャでどの程度の回数当選すると期待値通りの価値を得られるか計算することができます。</p>
+    <p><strong>合計価値収支の相殺に必要な追加当選回数</strong>：次のガチャでどれだけ期待値以上に当選すると、これまでの合計価値収支を相殺できるかを表します。例えばこの項目が+1回であれば期待値より1回多く当選した場合にガチャ全体で見たとき期待値通りの価値を得られるといえます。</p>
+    <p><strong>必要当選回数</strong>：合計価値収支の相殺に必要な追加当選回数＋期待値です。</p>
+
+    <h3>価値スコアについて</h3>
+    <p>本サイトでは、当選確率をpとしたとき、その当選の価値（価値スコア）を1/pと定義しています。これは、同一単価のガチャを前提とした場合、低確率の当選ほど平均的に多くの試行回数と資金を要するためです。</p>
+    <p>そのため、1%の当選1回は、2%の当選2回と等価となります。</p>
+    </details>
+
+  <button onclick="addGacha()">ガチャを追加</button>
+  <div id="container"></div>
+  <h4 id="totalresult">result</h4>
+
+    <h3>次のガチャ計算</h3>
+
+    <label for="nextProb">次のガチャの確率(%)</label>
+    <input type="number" id="nextProb" oninput="calcNeed()">
+
+    <label for="nextNum">次のガチャの回数</label>
+    <input type="number" id="nextNum" oninput="calcNeed()">
+
+    <p id="nextResult">必要当選回数</p>
+
+  <script>
+    let count = 0;
+
+    function addGacha() {
+    count++;
+
+    const div = document.createElement("div");
+    div.className = "gacha-box";
+
+    div.innerHTML = `
+        <div class="input-area">
+        <p>${count}つ目のガチャ</p>
+
+        <label for="prob${count}">確率(%)</label>
+        <input type="number" id="prob${count}" oninput="calc(${count})"><br>
+
+        <label for="num${count}">抽選回数</label>
+        <input type="number" id="num${count}" oninput="calc(${count})"><br>
+
+        <label for="hit${count}">当選回数</label>
+        <input type="number" id="hit${count}" oninput="calc(${count})">
+        </div>
+
+        <div class="result-area" id="result${count}">
+        ここに結果が表示されます
+        </div>
+    `;
+
+    document.getElementById("container").appendChild(div);
+    }
+    let baseScores = [];
+    let actualScores = [];
+    let scoreDiffs = [];
+    let totalDiffValue = 0;
+
+
+
+    function calc(n) {
+        const p = Number(document.getElementById("prob" + n).value);
+        const num = Number(document.getElementById("num" + n).value);
+        const hit = Number(document.getElementById("hit" + n).value);
+        const result = document.getElementById("result" + n);
+
+        if (p=== "" || num === "" || hit === "") {
+        result.textContent = "入力してください";
+        return;
+        }
+
+        // const p = Number(prob);
+        // const trials = Number(num);
+        // const success = Number(hit);
+        const expected = 0.01*p*num;
+        const x = hit - expected;
+        const expected_score = 1/(0.01*p);
+        const diff = x > 0 ? "+" + x.toFixed(2) : String(x.toFixed(2));  
+        const expected_average = expected_score * expected;
+        const score_diff = expected_score * x;
+        const score_diffrent =  score_diff > 0 ? "+" + score_diff.toFixed(2) : String(score_diff.toFixed(2)); 
+
+        scoreDiffs[n] = score_diff;
+        baseScores[n] = expected_average;
+        actualScores[n] = expected_score * hit 
+
+        result.innerHTML =
+        "期待値: " + expected.toFixed(2) + "回"+ "<br>" +
+        // "当選回数: " + hit + "回"+ "<br>" +
+        "期待値との差: " + diff + "回"+"<br>" +
+        "価値スコア: " + expected_score.toFixed(2) + "<br>" +
+        "基準価値スコア: " + expected_average.toFixed(2) + "<br>" +
+        "差分価値スコア: " + score_diffrent+ "<br>"
+        ;
+        updateTotal();
+    }
+    function updateTotal() {
+        let total = 0;
+        let totalBase = 0;
+        let totalActual = 0;
+        let totalDiff = 0;
+
+        for (let i = 1; i < baseScores.length; i++) {
+            totalBase += baseScores[i] || 0;
+            totalActual += actualScores[i] || 0;
+            totalDiff += scoreDiffs[i] || 0;
+        }
+        const totalDiff_display = totalDiff > 0 ? "+" + totalDiff.toFixed(2) : String(totalDiff.toFixed(2));  
+        totalDiffValue = totalDiff;
+
+        document.getElementById("totalresult").innerHTML =
+        "合計基準価値: " + totalBase.toFixed(2) + "<br>" +
+        "合計獲得価値: " + totalActual.toFixed(2) + "<br>" +
+        "合計価値収支: " + totalDiff_display;
+        calcNeed();
+    }
+    function calcNeed(){
+        const pNext = Number(document.getElementById("nextProb").value);
+        const numNext = Number(document.getElementById("nextNum").value);
+        const resultNext = Number(document.getElementById("nextResult").value);
+
+        const hitValueNext = 1 / (0.01 * pNext);
+        const nextExpected = 0.01 * pNext * numNext;
+
+        const needExtra = -totalDiffValue / hitValueNext;
+        const needHit = nextExpected + needExtra;
+        const needHitInt = Math.ceil(needHit);
+
+        const extraText =
+        needExtra > 0 ? "+" + needExtra.toFixed(2) : needExtra.toFixed(2);
+
+        nextResult.innerHTML =
+        "次のガチャの期待値: " + nextExpected.toFixed(2) + "回<br>" +
+        "次のガチャの価値スコア: " + hitValueNext.toFixed(2) + "<br>" +
+        "合計価値収支の相殺に必要な追加当選回数: " + extraText + "回<br>" +
+        "必要な当選回数: " + needHit.toFixed(2) + "回<br>" +
+        "現実に必要な最小整数回数: " + needHitInt + "回";
+
+
+    }
+
+    addGacha();
+  </script>
+</body>
+</html>
